@@ -16,7 +16,9 @@
 
 #include "buddy.h"
 #include "slab.h"
+#include "page_table.h"
 
+extern int get_next_ptp(ptp_t * cur_ptp, u32 level, vaddr_t va, ptp_t ** next_ptp, pte_t ** pte, bool alloc);
 extern unsigned long *img_end;
 
 #define PHYSICAL_MEM_START (24*1024*1024)	//24M
@@ -51,7 +53,33 @@ unsigned long get_ttbr1(void)
 void map_kernel_space(vaddr_t va, paddr_t pa, size_t len)
 {
 	// <lab2>
+	unsigned long pgtbl = get_ttbr1(); //phisical addr.
+	size_t block_num = ROUND_UP(len, BLOCK_SIZE) / BLOCK_SIZE;
+	// size_t block_num = len / BLOCK_SIZE;
 
+	ptp_t *ptp_0 = (ptp_t *)(pgtbl), *ptp_1, *ptp_2, *next_ptp;
+	pte_t *pte_0, *pte_1, *pte_2;
+	int ret;
+	for(size_t i = 0;i < block_num;i++, va += BLOCK_SIZE, pa += BLOCK_SIZE){
+		// kinfo("i: %lx\n", i);
+		if((ret = get_next_ptp(ptp_0, 0, va, &ptp_1, &pte_0, true)) < 0){
+			return;
+		}
+		if((ret = get_next_ptp(ptp_1, 1, va, &ptp_2, &pte_1, true)) < 0){
+			return;
+		}
+		ret = get_next_ptp(ptp_2, 2, va, &next_ptp, &pte_2, true);
+
+		pte_2->l2_block.is_valid = 1;
+		pte_2->l2_block.is_table = 0;
+
+		pte_2->l2_block.attr_index = 4;
+		pte_2->l2_block.SH = 3;
+		pte_2->l2_block.AF = 1;
+		pte_2->l2_block.UXN = 1;
+		
+		pte_2->l2_block.pfn = pa >> BLOCK_SHIFT;
+	}
 	// </lab2>
 }
 

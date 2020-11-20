@@ -7,6 +7,7 @@
 #undef PAGE_SIZE
 
 #include <common/mmu.h>
+// #include <common/mm.h>
 
 #undef phys_to_virt
 #undef virt_to_phys
@@ -207,5 +208,12 @@ int main(int argc, char *argv[])
 {
 	MU_RUN_SUITE(test_suite);
 	MU_REPORT();
+
+	// /* check kernel space map*/
+	// vaddr_t va = KBASE + (128 << 21);
+	// paddr_t pa = (128 << 21);
+	// size_t len = (128 << 21);
+	// map_kernel_space(va, pa, len);
+	// kernel_space_check();
 	return minunit_status;
 }

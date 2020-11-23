@@ -347,11 +347,37 @@ u64 sys_handle_brk(u64 addr)
 	 * top.
 	 *
 	 */
+	if(addr == 0){
+		//1. Create a new pmo with size 0 and type PMO_ANONYM.
+		pmo = obj_alloc(TYPE_PMO, sizeof(*pmo));
+		if (!pmo) {//pmo allocation out of memory
+			retval = vmspace->user_current_heap;
+			goto out_obj_put_vmspace;
+		}
+		pmo_init(pmo, PMO_ANONYM, 0, 0);//PMO_ANONYM:lazy allocation, size = 0
+		//2. Initialize vmspace->heap_vmr using function init_heap_vmr()
+		vmspace->heap_vmr = init_heap_vmr(vmspace, vmspace->user_current_heap, pmo);
+		retval = vmspace->user_current_heap;
+		goto out_obj_put_vmspace;
+	}else if(addr > vmspace->user_current_heap){
+		vmspace->heap_vmr->size += (addr - vmspace->user_current_heap);
+		vmspace->heap_vmr->pmo->size += (addr - vmspace->user_current_heap);
+		retval = addr;
+		goto out_obj_put_vmspace;
+	}else if(addr < vmspace->user_current_heap){
+		retval = -EINVAL;
+		goto out_obj_put_vmspace;
+	}else{
+		retval = vmspace->user_current_heap;
+		goto out_obj_put_vmspace;
+	}
 
 	/*
 	 * return origin heap addr on failure;
 	 * return new heap addr on success.
 	 */
+out_obj_put_vmspace:
 	obj_put(vmspace);
 	return retval;
+
 }

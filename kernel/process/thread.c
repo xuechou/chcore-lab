@@ -162,6 +162,11 @@ static u64 load_binary(struct process *process,
 			 * and mapping physical memory.
 			 */
 
+			// prepare seg_map_sz(seg_sz, p_vaddr)
+			seg_sz = elf->p_headers[i].p_memsz;
+			p_vaddr = elf->p_headers[i].p_vaddr;
+			seg_map_sz = ROUND_UP(p_vaddr + seg_sz, PAGE_SIZE) - ROUND_DOWN(p_vaddr, PAGE_SIZE); //2-sides alignment
+
 			pmo = obj_alloc(TYPE_PMO, sizeof(*pmo));
 			if (!pmo) {
 				r = -ENOMEM;
@@ -179,6 +184,10 @@ static u64 load_binary(struct process *process,
 			 * You should copy data from the elf into the physical memory in pmo.
 			 * The physical address of a pmo can be get from pmo->start.
 			 */
+
+			memcpy((void *)(phys_to_virt(pmo->start) + (p_vaddr - ROUND_DOWN(p_vaddr, PAGE_SIZE))),
+				 bin + elf->p_headers[i].p_offset, elf->p_headers[i].p_filesz);
+			// memcpy((void *)phys_to_virt(pmo->start), p_vaddr, seg_sz);
 
 			flags = PFLAGS2VMRFLAGS(elf->p_headers[i].p_flags);
 

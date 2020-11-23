@@ -56,6 +56,9 @@ void init_thread_ctx(struct thread *thread, u64 stack, u64 func, u32 prio,
 	 */
 
 	/* Fill the context of the thread */
+	thread->thread_ctx->ec.reg[SP_EL0] = stack; //1. Set SP_EL0 to stack.
+	thread->thread_ctx->ec.reg[ELR_EL1] = func; //2. Set ELR_EL1 to the entrypoint of this thread.
+	thread->thread_ctx->ec.reg[SPSR_EL1] = SPSR_EL1_EL0t; //3. Set SPSR_EL1 to SPSR_EL1_EL0t as the properly PSTATE.
 
 	/* Set thread type */
 	thread->thread_ctx->type = type;

@@ -13,22 +13,20 @@ u64 syscall(u64 sys_no, u64 arg0, u64 arg1, u64 arg2, u64 arg3, u64 arg4,
 	 * And finally use svc to execute the system call. After syscall returned, don't forget
 	 * to move return value from x0 to the ret variable of this function
 	 */
-	__asm__ volatile("mov %%x0, %1\n\t"
-					"mov %%x1, %2\n\t"
-					"mov %%x2, %3\n\t"
-					"mov %%x3, %4\n\t"
-					"mov %%x4, %5\n\t"
-					"mov %%x5, %6\n\t"
-					"mov %%x6, %7\n\t"
-					"mov %%x7, %8\n\t"
-					"mov %%x8, %9\n\t"
-					"svc #0\n\t"
-					"mov %0, %%x0\n\t"
-					: "=r" (ret)
-					: "r" (arg0), "r" (arg1), "r" (arg2), "r" (arg3)
-					  "r" (arg4), "r" (arg5), "r" (arg6), "r" (arg7)
-					  "r" (sys_no)
-					: );
+	asm volatile("mov x0, %1\n\t"
+				"mov x1, %2\n\t"
+				"mov x2, %3\n\t"
+				"mov x3, %4\n\t"
+				"mov x4, %5\n\t"
+				"mov x5, %6\n\t"
+				"mov x6, %7\n\t"
+				"mov x7, %8\n\t"
+				"mov x8, %9\n\t"
+				"svc #0\n\t"
+				"mov %0, x0\n\t"
+				: "=r" (ret)
+				: "r" (arg0), "r" (arg1), "r" (arg2), "r" (arg3), "r" (arg4), "r" (arg5), "r" (arg6), "r" (arg7), "r" (sys_no)
+				: "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8");
 
 	return ret;
 }

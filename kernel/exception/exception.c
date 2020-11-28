@@ -32,15 +32,15 @@ void exception_init_per_cpu(void)
 	 * Uncomment the timer_init() when you are handling preemptive
 	 * shceduling
 	 */
-	// timer_init();
+	timer_init();
 
 	/**
 	 * Lab3: Your code here
 	 * Setup the exception vector with the asm function written in exception.S
 	 */
-	disable_irq();
+	// disable_irq();
 	set_exception_vector();
-	enable_irq();
+	// enable_irq();
 }
 
 void exception_init(void)
@@ -55,7 +55,9 @@ void handle_entry_c(int type, u64 esr, u64 address)
 	 * Lab4
 	 * Acquire the big kernel lock, if the exception is from kernel
 	 */
-
+	if(type >= SYNC_EL0_64){ //means in user mode
+		lock_kernel();
+	}
 	/* ec: exception class */
 	u32 esr_ec = GET_ESR_EL1_EC(esr);
 

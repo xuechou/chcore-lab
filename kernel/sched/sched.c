@@ -136,7 +136,8 @@ u64 switch_context(void)
 	 * Return the correct value in order to make eret_to_thread work correctly
 	 * in main.c
 	 */
-	return 0;
+
+	return (u64)(target_ctx->ec.reg); //protected mode, return virtual addr.
 }
 
 /* SYSCALL functions */
@@ -147,6 +148,15 @@ u64 switch_context(void)
  */
 void sys_yield(void)
 {
+	//reset budget to sched current thread immediately
+	if(current_thread !=NULL){
+		current_thread->thread_ctx->sc->budget = 0;
+	}
+	//schedule
+	//then switch context(change vmspace, change pgtbl addr)
+	//then eret:resume registers value in user mode
+	sched();
+	eret_to_thread(switch_context()); //return to user mode
 }
 
 void sys_top(void)

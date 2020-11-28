@@ -37,6 +37,7 @@
 
 /* See more details about the bias in registers.h */
 .macro	exception_enter
+	// msr     daifset, #2
 	sub	sp, sp, #ARCH_EXEC_CONT_SIZE
 	stp	x0, x1, [sp, #16 * 0]
 	stp	x2, x3, [sp, #16 * 1]
@@ -82,6 +83,7 @@
 	ldp	x26, x27, [sp, #16 * 13]
 	ldp	x28, x29, [sp, #16 * 14]
 	add	sp, sp, #ARCH_EXEC_CONT_SIZE
+	// msr	daifclr, #2
 	eret
 .endm
 
@@ -91,6 +93,7 @@
  * 	unlock the big kernel lock before returning to the user mode
  */
 .macro	exception_return
+	bl unlock_kernel
 	exception_exit
 .endm
 
@@ -130,6 +133,25 @@
  */
 .align	11
 EXPORT(el1_vector)
+	exception_entry sync_el1t
+	exception_entry irq_el1t
+	exception_entry fiq_el1t
+	exception_entry error_el1t
+
+	exception_entry sync_el1h
+	exception_entry irq_el1h
+	exception_entry fiq_el1h
+	exception_entry error_el1h
+
+	exception_entry sync_el0_64
+	exception_entry irq_el0_64
+	exception_entry fiq_el0_64
+	exception_entry error_el0_64
+
+	exception_entry sync_el0_32
+	exception_entry irq_el0_32
+	exception_entry fiq_el0_32
+	exception_entry error_el0_32
 
 sync_el1t:
 	handle_entry	1, SYNC_EL1t

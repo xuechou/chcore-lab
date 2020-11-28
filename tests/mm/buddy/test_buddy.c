@@ -63,6 +63,10 @@ static void test_alloc(struct phys_mem_pool *zone, long n, long order)
 	for (i = 0; i < n; ++i) {
 		page = buddy_get_pages(zone, order);
 		mu_check(page != NULL);
+		// for(int i=0;i < BUDDY_MAX_ORDER;i++){
+		// 	printf("order %d : %lld \n", i, global_mem.free_lists[i].nr_free);
+		// }
+		// mu_check(global_mem.free_lists[BUDDY_MAX_ORDER-1].nr_free == 1);
 		get_page_idx(zone, page);
 	}
 	return;
@@ -99,15 +103,22 @@ void test_buddy(void)
 	/* check the init state */
 	nget = buddy_num_free_page(&global_mem);
 	ncheck = npages / powl(2, BUDDY_MAX_ORDER - 1);
-	//printf("ncheck is %ld\n", ncheck);
-	mu_check(nget == ncheck);
+	mu_check(nget == ncheck); // nget = ncheck = free_lists[BUDDY_MAX_ORDER-1].nr_free = 64
+	// for(int i=0;i < BUDDY_MAX_ORDER;i++){
+	// 	printf("order %d : %lld \n", i, global_mem.free_lists[i].nr_free);
+	// }
+	// mu_check(global_mem.free_lists[BUDDY_MAX_ORDER-1].nr_free == 1);
 
 	/* alloc single page for $npages times */
 	test_alloc(&global_mem, npages, 0);
 
 	/* should have 0 free pages */
-	nget = buddy_num_free_page(&global_mem);
+	nget = buddy_num_free_page(&global_mem); //nget=28
 	ncheck = 0;
+	// for(int i=0;i < BUDDY_MAX_ORDER;i++){
+	// 	printf("order %d : %lld \n", i, global_mem.free_lists[i].nr_free);
+	// }
+	printf("\n nget:%ld, ncheck:%ld ", nget, ncheck);
 	mu_check(nget == ncheck);
 
 	/* free all pages */

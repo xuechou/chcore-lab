@@ -1,0 +1,3 @@
+/chos/kernel/mm/CMakeFiles/rebuild_cache.dir
+/chos/kernel/mm/CMakeFiles/Project-mm.dir
+/chos/kernel/mm/CMakeFiles/edit_cache.dir

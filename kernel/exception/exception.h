@@ -30,7 +30,7 @@
 #define SYNC_EL0_32             12
 #define IRQ_EL0_32              13
 #define FIQ_EL0_32              14
-#define ERROR_EL0_32            15
+#define ERROR_EL0_32            15                    
 
 #ifndef __ASM__
 #include <common/types.h>

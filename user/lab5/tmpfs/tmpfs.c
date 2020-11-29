@@ -131,6 +131,28 @@ static int tfs_mknod(struct inode *dir, const char *name, size_t len, int mkdir)
 	}
 	// TODO: write your code here
 
+	// u32 key = hash_chars(name, len);
+	// hlist_head = htable_get_bucket(&dir->dentries, )
+	// for_each_in_hlist()
+
+	if(tfs_lookup(dir, name, len) != NULL){
+		return -EEXIST;
+	}
+	//init inode*
+	inode = mkdir ? new_dir() : new_reg();
+	if(IS_ERR(inode)){
+		return -ENOMEM;
+	}
+	//init dent* using inode and other args
+	dent = new_dent(inode, name, len);
+	if(IS_ERR(dent)){
+		free(inode);
+		return -ENOMEM;
+	}
+	//add to htable
+	init_hlist_node(&dent->node);
+	htable_add(&(dir->dentries), dent->name.hash, &dent->node);
+
 	return 0;
 }
 
@@ -189,6 +211,45 @@ int tfs_namex(struct inode **dirat, const char **name, int mkdir_p)
 	} else {
 		BUG_ON(*dirat == NULL);
 		BUG_ON((*dirat)->type != FS_DIR);
+	}
+	// code in <lab5>
+	// extract first segment of name
+	for(i = 0;i < MAX_FILENAME_LEN;i++){
+		if((*name)[i] == '/' || !(*name)[i]){
+			buff[i] = '\0';
+			break;
+		}
+		buff[i] = (*name)[i];
+	}
+
+	// get dentry under parent dir "dirat"
+	dent = tfs_lookup(*dirat, buff, i);
+	if(!(*name)[i]){ // to the end, *name = filename, final check whether file exists
+		return dent ? 0 : -ENOENT;
+	}
+	if(!dent){// not exist, create or quit
+		if(mkdir_p){
+			err = tfs_mkdir(dirat, buff, i);
+			if(err < 0){
+				return err;
+			}
+			dent = tfs_lookup(*dirat, buff, i);
+		}else{
+			return -ENOENT;
+		}
+	}
+	// set name and recursion
+	(*name) += i;
+	if(**name){ // name still not to the end
+		*dirat = dent->inode;
+		while((**name) == '/'){ // trim
+			(*name)++;
+		}
+		if(**name){ // a child name exists, recursion
+			return tfs_namex(dirat, name, mkdir_p);
+		}else{ // name == '\0', which means origin name ends up with '/'
+			return 0;
+		}
 	}
 
 	// make sure a child name exists
@@ -270,13 +331,43 @@ ssize_t tfs_file_write(struct inode * inode, off_t offset, const char *data,
 	BUG_ON(inode->type != FS_REG);
 	BUG_ON(offset > inode->size);
 
-	u64 page_no, page_off;
+	u64 page_no, page_off; //page_off: offset inside the page
 	u64 cur_off = offset;
 	size_t to_write;
 	void *page;
 
 	// TODO: write your code here
+	u64 origin_total_page_num = ROUND_UP(inode->size, PAGE_SIZE) / PAGE_SIZE;
+	size_t cur_to_write;
+	for(to_write = size;to_write > 0;){
+		page_no = ROUND_DOWN(cur_off, PAGE_SIZE) / PAGE_SIZE;
+		if(origin_total_page_num == 0 || page_no >= origin_total_page_num){ // create a new page
+			page = malloc(PAGE_SIZE);
+			if(!page){
+				goto on_fail;
+			}
+			if(radix_add(&inode->data, page_no * PAGE_SIZE, page) < 0){ //radix tree key is offset(integer)
+				goto on_fail;
+			}
+		}
+		page = radix_get(&inode->data, page_no * PAGE_SIZE);
+		if(!page){
+			goto on_fail;
+		}
+		page_off = cur_off % PAGE_SIZE;
+		cur_to_write = MIN(PAGE_SIZE - page_off, to_write);
+		// copy data to memory
+		memcpy((char *)page + page_off, data, cur_to_write);		
+		//update variables in one loop
+		to_write -= cur_to_write;
+		cur_off += cur_to_write;
+		data += cur_to_write;
+	}
+	if(inode->size < cur_off){
+		inode->size = cur_off;
+	}
 
+on_fail:
 	return cur_off - offset;
 }
 
@@ -295,6 +386,25 @@ ssize_t tfs_file_read(struct inode * inode, off_t offset, char *buff,
 	size_t to_read;
 	void *page;
 
+	size_t cur_to_read;
+	to_read = MIN(inode->size - offset, size); //cannot read out of the file
+	while(to_read > 0){
+		page_no = ROUND_DOWN(offset, PAGE_SIZE) / PAGE_SIZE;
+		page = radix_get(&inode->data, page_no * PAGE_SIZE);
+		if(!page){
+			goto on_fail;
+		}
+		page_off = cur_off % PAGE_SIZE;
+		cur_to_read = MIN(PAGE_SIZE - page_off, to_read);
+		//copy data to buff
+		memcpy(buff, (char *)page + page_off, cur_to_read);
+		//update variables in one loop
+		to_read -= cur_to_read;
+		cur_off += cur_to_read;
+		buff += cur_to_read;
+	}
+
+on_fail:
 	return cur_off - offset;
 }
 
@@ -318,6 +428,14 @@ int tfs_load_image(const char *start)
 
 	for (f = g_files.head.next; f; f = f->next) {
 		// TODO: Lab5: your code is here
+		dirat = tmpfs_root;
+		leaf = f->name; //path name?
+		err = tfs_namex(&dirat, &leaf, 0);
+		if(err < 0){
+			return err;
+		}
+		dent = tfs_lookup(dirat, leaf, f->header.c_namesize);
+		
 	}
 
 	return 0;

@@ -426,16 +426,45 @@ int tfs_load_image(const char *start)
 	cpio_init_g_files();
 	cpio_extract(start, "/");
 
+	int f_type;
 	for (f = g_files.head.next; f; f = f->next) {
 		// TODO: Lab5: your code is here
 		dirat = tmpfs_root;
 		leaf = f->name; //path name?
+		printf("origin leaf name: %s\n", leaf);
 		err = tfs_namex(&dirat, &leaf, 0);
-		if(err < 0){
+		if(err < 0 && err != -ENOENT){
 			return err;
 		}
-		dent = tfs_lookup(dirat, leaf, f->header.c_namesize);
-		
+		f_type = f->header.c_mode & CPIO_FT_MASK;
+		printf("leaf name: %s f_type: %d\n", leaf, f_type);
+		// dent = tfs_lookup(dirat, leaf, strlen(leaf));
+		// if(!dent){
+		if(err == -ENOENT){
+			switch (f_type){
+			case CPIO_REG:
+				err = tfs_creat(dirat, leaf, strlen(leaf));
+				break;
+			case CPIO_DIR:
+				err = tfs_mkdir(dirat, leaf, strlen(leaf));
+				break;
+			default:
+				printf("Unknown cpio file type\n");
+				err = -ESUPPORT;
+				break;
+			}
+			if(err < 0){
+				return err;
+			}
+		}
+		dent = tfs_lookup(dirat, leaf, strlen(leaf));
+		if(f_type == CPIO_REG){
+			err = tfs_file_write(dent->inode, 0, f->data, f->header.c_filesize);
+			BUG_ON(err != f->header.c_filesize);
+			if(err < 0){
+				return err;
+			}
+		}
 	}
 
 	return 0;

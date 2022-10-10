@@ -87,12 +87,40 @@ static struct page *get_buddy_chunk(struct phys_mem_pool *pool,
  * you can invoke split_page recursively until the given page can not be splitted into two
  * smaller sub-pages.
  */
+// 递归的等分物理块
 static struct page *split_page(struct phys_mem_pool *pool, u64 order,
 			       struct page *page)
 {
 	// <lab2>
 	struct page *split_page = NULL;
-	return split_page;
+	if(page->allocated){
+		kwarn("error: try to split an allocated page\n");
+		return 0;
+	}
+
+	// 从空闲列表中,移除待分割的物理块
+	struct free_list* free_list = &pool->free_lists[page->order];
+	list_del(&page->node);
+	free_list->nr_free--;
+
+	// 退出递归的条件：order分割为指定大小
+	while(page->order > order){
+		// 2等分原来的page
+		page->order--;
+		struct page* buddy_page = get_buddy_chunk(pool, page);
+
+		// 插入伙伴块到空闲列表中
+		if(buddy_page != NULL){
+			buddy_page->allocated = 0;
+			buddy_page->order = page->order;
+			
+		struct free_list* free_list = &pool->free_lists[buddy_page->order];
+		list_add(&buddy_page->node, &free_list->free_list);
+		free_list->nr_free++;
+		}
+	}
+
+	return page; // TODO:
 	// </lab2>
 }
 
@@ -104,10 +132,30 @@ static struct page *split_page(struct phys_mem_pool *pool, u64 order,
  * Hints: Find the corresonding free_list which can allocate 1<<order
  * continuous pages and don't forget to split the list node after allocation   
  */
+// 申请大小为指定 order的page
 struct page *buddy_get_pages(struct phys_mem_pool *pool, u64 order)
 {
 	// <lab2>
 	struct page *page = NULL;
+	// 寻找满足order要求，并且非空的free_list
+	int current_order = order;
+	while(current_order < BUDDY_MAX_ORDER && pool->free_lists[current_order].nr_free <=0)
+	{ current_order++; }
+
+	if (current_order >= BUDDY_MAX_ORDER){
+		kwarn("error: try to allocate an too big size chunk.\n");
+		return NULL;
+	}
+
+	// TODO: 
+	struct page *page = list_entry(pool->free_list[current].free_list.next, struct page, node);
+	if(page == NULL){
+		kdebug("buddy get a NULL page\n");
+		return NULL;
+	}
+
+	split_page(pool, order, page); //TODO: not right??? return value
+	page->allocated = 1; // 标记为已经分配
 
 	return page;
 	// </lab2>
@@ -169,7 +217,7 @@ static struct page *merge_page(struct phys_mem_pool *pool, struct page *page)
 	
 	// 合并之后的块，插入到空闲队列
 	struct free_list* free_list = &pool->free_lists[page->order];
-	list_add(&page->node);
+	list_add(&page->node, &free_list->free_list);
 	free_list->nr_free++;
 
 	return page;  // FIXME: not use mergerd_page
@@ -195,7 +243,7 @@ void buddy_free_pages(struct phys_mem_pool *pool, struct page *page)
 	page->allocated = 0;
 	
 	struct free_list* free_list = &pool->free_lists[page->order];
-	list_add(&page->node);
+	list_add(&page->node, &free_list->free_list);
 	free_list->nr_free++;
 
 	// 递归的向上合并

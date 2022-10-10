@@ -186,6 +186,20 @@ static struct page *merge_page(struct phys_mem_pool *pool, struct page *page)
 void buddy_free_pages(struct phys_mem_pool *pool, struct page *page)
 {
 	// <lab2>
+	if(!page->allocated){
+		kwarn("error: try to free a free page\n");
+		return;
+	}
+
+	// 标记为空闲块，插入到空闲队列
+	page->allocated = 0;
+	
+	struct free_list* free_list = &pool->free_lists[page->order];
+	list_add(&page->node);
+	free_list->nr_free++;
+
+	// 递归的向上合并
+	merge_page(pool, page);
 
 	// </lab2>
 }

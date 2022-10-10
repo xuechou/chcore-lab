@@ -47,6 +47,7 @@ void init_buddy(struct phys_mem_pool *pool, struct page *start_page,
 	}
 }
 
+// 找到指定块的伙伴块
 static struct page *get_buddy_chunk(struct phys_mem_pool *pool,
 				    struct page *chunk)
 {
@@ -54,16 +55,16 @@ static struct page *get_buddy_chunk(struct phys_mem_pool *pool,
 	u64 buddy_chunk_addr;
 	int order;
 
-	/* Get the address of the chunk. */
-	chunk_addr = (u64) page_to_virt(pool, chunk);
+	/* Get the address of the chunk.  伙伴系统分配的物理内存`块`叫做chunk，块大小是2的幂次 */
+	chunk_addr = (u64) page_to_virt(pool, chunk); // 通过page meta data，得到chunk起始的虚拟地址
 	order = chunk->order;
 	/*
 	 * Calculate the address of the buddy chunk according to the address
 	 * relationship between buddies.
 	 */
-#define BUDDY_PAGE_SIZE_ORDER (12)
+#define BUDDY_PAGE_SIZE_ORDER (12)  // 块的基本大小为4kb
 	buddy_chunk_addr = chunk_addr ^
-	    (1UL << (order + BUDDY_PAGE_SIZE_ORDER));
+	    (1UL << (order + BUDDY_PAGE_SIZE_ORDER));   // 异或得到伙伴块的地址
 
 	/* Check whether the buddy_chunk_addr belongs to pool. */
 	if ((buddy_chunk_addr < pool->pool_start_addr) ||
@@ -121,12 +122,57 @@ struct page *buddy_get_pages(struct phys_mem_pool *pool, u64 order)
  * there is not corresponding buddy page. get_buddy_chunk
  * is helpful in this function.
  */
+// 指定块向上递归地合并
 static struct page *merge_page(struct phys_mem_pool *pool, struct page *page)
 {
 	// <lab2>
-
 	struct page *merge_page = NULL;
-	return merge_page;
+
+	// 禁止对已分配的块，进行合并操作
+	if (page->allocated){
+		kwarn("Error: try to merge an allocated page\n", page);
+		return NULL;
+	}
+
+	// 合并前，从空闲链表中删除待合并的块
+	struct free_list* free_list = &pool->free_lists[page->order];
+	list_del(&page->node);
+	free_list->nr_free--;
+
+	/* 递归的退出条件：1.伙伴块不是空闲 2.不存在伙伴块
+	*/
+	while (page->order < BUDDY_MAX_ORDER-1){
+		struct page* buddy_page = get_buddy_chunk(pool, page);
+		// 只能和`大小相同`且处在`空闲状态`的伙伴块合并
+		if (buddy_page == NULL || buddy_page->allocated ||
+		    buddy_page->order != page->order){
+				break;
+			}
+
+		// 调整2个伙伴块的位置，保证page为地址较小的左伙伴
+		if(page > buddy_page){
+			struct page* temp = buddy_page;
+			buddy_page = page;
+			page = temp;
+		}
+
+		// 合并伙伴块
+		buddy_page->allocated = 1; // ???标记伙伴块为已分配
+
+		struct free_list* free_list = &pool->free_lists[page->order];
+		list_del(&page->node);
+		free_list->nr_free--;
+
+		page->order++;
+
+	}
+	
+	// 合并之后的块，插入到空闲队列
+	struct free_list* free_list = &pool->free_lists[page->order];
+	list_add(&page->node);
+	free_list->nr_free++;
+
+	return page;  // FIXME: not use mergerd_page
 	// </lab2>
 }
 

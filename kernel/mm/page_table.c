@@ -75,11 +75,11 @@ static int set_pte_flags(pte_t * entry, vmr_prop_t flags, int kind)
 /*
  * Find next page table page for the "va".
  *
- * cur_ptp: current page table page
+ * cur_ptp: current page table page 已知，当前页表的虚拟地址
  * level:   current ptp level
  *
- * next_ptp: returns "next_ptp"
- * pte     : returns "pte" (points to next_ptp) in "cur_ptp"
+ * next_ptp: returns "next_ptp" 求得，下级页表的虚拟地址
+ * pte     : returns "pte" (points to next_ptp) in "cur_ptp" 当前页表中的某条目，该条目保存下级页表的地址
  *
  * alloc: if true, allocate a ptp when missing
  *
@@ -154,7 +154,7 @@ static int get_next_ptp(ptp_t * cur_ptp, u32 level, vaddr_t va,
  * pgtbl @ ptr for the first level page table(pgd) virtual address
  * va @ query virtual address
  * pa @ return physical address
- * entry @ return page table entry
+ * entry @ return page table entry TODO: not used in this func()
  * 
  * Hint: check the return value of get_next_ptp, if ret == BLOCK_PTP
  * return the pa and block entry immediately
@@ -162,7 +162,41 @@ static int get_next_ptp(ptp_t * cur_ptp, u32 level, vaddr_t va,
 int query_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, paddr_t * pa, pte_t ** entry)
 {
 	// <lab2>
+	ptp_t *cur_ptp = (ptp_t*) pgtbl;
+	ptp_t *next_ptp = NULL;
+	ptp_t *next_pte = NULL;
+	int level = 0;
+	int err = 0;
 
+	// get L3 page pte
+	while(level <=3 && (err = get_next_ptp(cur_ptp, level, va, &next_ptp, &next_pte, false)) == NORMAL_PTP)
+	{
+		cur_ptp = next_pte;
+		level++;
+	}
+	*entry = next_pte; // TODO: ??? 
+
+	if(err == NORMAL_PTP){
+		if(level != 4){
+			kwarn("query_in_pgtbl: level = %d < 4\n", level);
+			return -ENOMAPPING;
+		}
+		
+		// invalid page
+		if(! next_pte->l3_page.is_valid || ! next_pte_){
+			return -ENOMAPPING;
+		}
+
+		// get phys addr
+		*pa = virt_to_phys((vaddr_t)next_ptp) + GET_VA_OFFSET(va);
+		return 0;
+
+	}else if(err < 0){
+		return err;
+	}else{
+		kwarn("query_in_pgtbl: should never be  here\n");
+		return err;
+	}
 	// </lab2>
 	return 0;
 }
@@ -186,7 +220,28 @@ int map_range_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, paddr_t pa,
 		       size_t len, vmr_prop_t flags)
 {
 	// <lab2>
+	for(const vaddr_t end_va = va + len; va < end_va; va += PAGE_SIZE, pa += PAGE_SIZE){
+		ptp_t *cur_ptp = (ptp_t*) pgtbl;
+		ptp_t *next_ptp = NULL;
+		pte_t * next_pte = NULL;
+		int level = 0;
+		int err = 0;
 
+		while(level <= 2 && (err = get_next_ptp(cur_ptp, level, va, &next_ptp, &next_pte, true)) == NORMAL_PTP){
+			cur_ptp = next_ptp;
+			level ++;
+		}
+
+		// map phy addr
+		u32 index = GET_L3_INDEX(va);
+		next_pte = &(cur_ptp->ent[index]);
+		next_pte->l3_page.is_valid =1;
+		next_pte->l3_page.is_page =1;
+		next_pte->l3_page.pfn = pa >> PAGE_SHIFT;
+		set_pte_flags(next_pte, flags, KERNEL_PTE);
+	}
+
+	flush_tlb();
 	// </lab2>
 	return 0;
 }
@@ -207,6 +262,27 @@ int map_range_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, paddr_t pa,
 int unmap_range_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, size_t len)
 {
 	// <lab2>
+	for(const vaddr_t end_va = va + len; va < end_va; va += PAGE_SIZE){
+		ptp_t *cur_ptp = (ptp_t*) pgtbl;
+		ptp_t *next_ptp = NULL;
+		pte_t * next_pte = NULL;
+		int level = 0;
+		int err = 0;
+
+		while(level <= 2 && (err = get_next_ptp(cur_ptp, level, va, &next_ptp, &next_pte, true)) == NORMAL_PTP){
+			cur_ptp = next_ptp;
+			level ++;
+		}
+
+		if( err == NORMAL_PTP && level == 3 && cur_ptp != NULL){
+			u32 index = GET_L3_INDEX(va);
+			next_pte = &(cur_ptp->ent[index]);
+			next_pte->pte = 0;
+		}
+
+	}
+
+	flush_tlb();
 
 	// </lab2>
 	return 0;

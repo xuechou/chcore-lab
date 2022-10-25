@@ -87,5 +87,30 @@ int handle_trans_fault(struct vmspace *vmspace, vaddr_t fault_addr)
 	 * has been omitted in our lab for simplification.
 	 */
 
+	vmr = find_vmr_for_va(vmspace, fault_addr);
+	if(vmr == NULL){
+		kdebug("Couldn't found vmr for va\n");
+		return -ENOMAPPING;
+	}
+	if(vmr->pmo->type != PMO_ANONYM){
+		kdebug("PMO type isn't PMO_ANONYM\n");
+		return -ENOMAPPING;
+	}
+	void *page = get_page(0);
+	if(page == NULL){
+		kdebug("Couldn't get a new page\n");
+		return -ENOMAPPING;
+	}
+	pa = (paddr_t)virt_to_phys(page);
+	// 发生缺页异常表示 fault_addr所在的页不存在，所以向下取整得到页的起始地址
+	offset = ROUND_DOWN(fault_addr, PAGE_SIZE);
+	int ret = map_range_in_pgtbl(vmspace->pgtbl, offset, pa, PAGE_SIZE, vmr->perm);
+	if(ret <0 ){
+		free_page(page);
+		kdebug("Map page in pgtbl fault\n");
+		return -ENOMAPPING;
+	}
+	kdebug("page fault success\n");
+	
 	return 0;
 }

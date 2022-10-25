@@ -347,11 +347,54 @@ u64 sys_handle_brk(u64 addr)
 	 * top.
 	 *
 	 */
+	retval = vmspace->user_current_heap;
 
+	// 地址为0,表示Heap要初始化
+	if(addr==0){
+		pmo = obj_alloc(TYPE_PMO, sizeof(*pmo));
+		if(!pmo){
+			retval = -ENOMEM;
+			goto error_return;
+		}
+		pmo_init(pmo, PMO_ANONYM, 0, 0);
+		int pmo_cap = cap_alloc(current_process, pmo, 0);
+		if(pmo_cap < 0){
+			retval = pmo_cap;
+			goto free_obj;
+		}
+
+		vmr = init_heap_vmr(vmspace, vmspace->user_current_heap, pmo);
+		if(vmr == NULL){
+			retval = -ENOMAPPING;
+			goto free_obj;
+		}
+
+		vmspace->heap_vmr = vmr;
+		retval = vmspace->user_current_heap;
+	}
+	// 扩容：堆顶的位置 vmspace->user_current_heap + vmspace->heap_vmr->size
+	else if(addr > vmspace->user_current_heap + vmspace->heap_vmr->size){
+		// heap扩容后的大小
+		size_t siz = ROUND_UP(addr - vmspace->user_current_heap, PAGE_SIZE);
+		// 实际的内存分配是触发缺页异常后分配
+		vmspace->heap_vmr->size = siz;
+		vmsapce->heap_vmr->pmo->size = siz;
+		retval = addr;
+	}
+	// 缩容
+	else if(addr < vmspace-user_current_heap + vmsapce->heap_vmr->size){
+		retval = -EINVAL;
+		goto error_return;
+	}
 	/*
 	 * return origin heap addr on failure;
 	 * return new heap addr on success.
 	 */
+	obj_put(vmspace);
+	return retval;
+free_obj:
+	obj_free(pmo);
+error_return:
 	obj_put(vmspace);
 	return retval;
 }

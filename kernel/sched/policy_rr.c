@@ -118,6 +118,10 @@ ret_idle:
 
 static inline void rr_sched_refill_budget(struct thread *target, u32 budget)
 {
+	if(target && target->thread_ctx && target->thread_ctx->type!= TYPE_IDLE)
+	{
+		target->thread_ctx->budget = budget;
+	}
 }
 
 /*
@@ -186,6 +190,10 @@ int rr_sched_init(void)
  */
 void rr_sched_handle_timer_irq(void)
 {
+	if(current_thread == NULL || current_thread->thread_ctx->type == TYPE_IDLE) return;
+	if(current_thread->thread_ctx->sc->budget >0){
+		current_thread->thread_ctx->sc->budget--;
+	}
 }
 
 struct sched_ops rr = {

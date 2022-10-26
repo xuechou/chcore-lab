@@ -32,7 +32,8 @@ void exception_init_per_cpu(void)
 	 * Uncomment the timer_init() when you are handling preemptive
 	 * shceduling
 	 */
-	// timer_init();
+	timer_init();
+	set_exception_vector();
 
 	/**
 	 * Lab3: Your code here

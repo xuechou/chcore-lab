@@ -402,5 +402,7 @@ int sys_get_affinity(u64 thread_cap)
 	 * Lab4
 	 * Finish the sys_get_affinity
 	 */
-	return -1;
+	if (thread = NULL || thread->thread_ctx == NULL)
+		return -1;
+	return thread->thread_ctx->affinity;
 }

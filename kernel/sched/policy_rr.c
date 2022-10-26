@@ -51,6 +51,22 @@ struct thread idle_threads[PLAT_CPU_NUM];
  */
 int rr_sched_enqueue(struct thread *thread)
 {
+	if(thread == NULL || thread->thread_ctx == NULL) return -1;
+	if(thread->thread_ctx->type == TYPE_IDLE) return 0;
+	if(thread->thread_ctx->state == TS_READY) return -1;
+
+	s32 aff = thread->thread_ctx->affinity;
+	if(aff == NO_AFF){
+		thread->thread_ctx->cpuid = smp_get_cpu_id();
+	}
+	else if(aff < PLAT_CPU_NUM){
+		thread->thread_ctx->cpuid = aff;
+	}else {
+		return -1;
+	}
+
+	thread->thread_ctx->state = TS_READY;
+	list_append(&thread->ready_queue_node, &rr_ready_queue[thread->thread_ctx->cpuid]);
 	return -1;
 }
 
@@ -62,7 +78,18 @@ int rr_sched_enqueue(struct thread *thread)
  */
 int rr_sched_dequeue(struct thread *thread)
 {
-	return -1;
+	if(thread == NULL
+		|| thread->thread_ctx == NULL
+		|| list_empty(&thread->ready_queue_node)
+		|| thread->thread_ctx->affinity >= PLAT_CPU_NUM
+		|| thread->thread_ctx->type == TYPE_IDLE
+		|| thread->thread_ctx->state != TS_READY)
+		{
+			return -1;
+		}
+	thread->thread_ctx->state = TS_INTER;
+	list_del(&thread->ready_queue_node);
+	return 0;
 }
 
 /*
@@ -78,7 +105,15 @@ int rr_sched_dequeue(struct thread *thread)
  */
 struct thread *rr_sched_choose_thread(void)
 {
-	return NULL;
+	u32 cpu_id = smp_get_cpu_id();
+	if(list_empty(&rr_ready_queue[cpu_id])) goto ret_idle;
+	struct thread *ret = list_entry(rr_ready_queue[cpu_id].next, struct thread, ready_queue_node);
+	if(rr_sched_dequeue(ret)){
+		goto ret_idle;
+	}
+	return ret;
+ret_idle:
+	return &idle_threads[cpu_id];
 }
 
 static inline void rr_sched_refill_budget(struct thread *target, u32 budget)
@@ -99,7 +134,18 @@ static inline void rr_sched_refill_budget(struct thread *target, u32 budget)
  */
 int rr_sched(void)
 {
-	return -1;
+	if(current_thread != NULL && current_thread->thread_ctx->type != TYPE_IDLE){
+		if(current_thread->thread_ctx->sc->budget > 0){
+			return -1;
+		}
+		if(rr_sched_enqueue(current_thread)){
+			return -1;
+		}
+	}
+	struct thread *target = rr_sched_choose_thread();
+	rr_sched_refill_budget(target, DEFAULT_BUDGET);
+	switch_context(target);
+	return 0;
 }
 
 /*

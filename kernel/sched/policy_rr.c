@@ -148,7 +148,7 @@ int rr_sched(void)
 	}
 	struct thread *target = rr_sched_choose_thread();
 	rr_sched_refill_budget(target, DEFAULT_BUDGET);
-	switch_context(target);
+	switch_to_context(target);
 	return 0;
 }
 

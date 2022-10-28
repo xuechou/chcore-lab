@@ -120,7 +120,7 @@ static inline void rr_sched_refill_budget(struct thread *target, u32 budget)
 {
 	if(target && target->thread_ctx && target->thread_ctx->type!= TYPE_IDLE)
 	{
-		target->thread_ctx->budget = budget;
+		target->thread_ctx->sc->budget = budget;
 	}
 }
 
